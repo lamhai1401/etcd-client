@@ -8,6 +8,7 @@ import (
 	"time"
 
 	v3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 func TestClient(t *testing.T) {
@@ -20,6 +21,28 @@ func TestClient(t *testing.T) {
 	kv := v3.NewKV(cli)
 
 	var total = 0
+
+	t.Run("Test Lock data", func(t *testing.T) {
+		// create a sessions to aqcuire a lock
+		s, _ := concurrency.NewSession(cli, concurrency.WithTTL(10))
+		defer s.Close()
+		l := concurrency.NewMutex(s, "key")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		// acquire lock (or wait to have it)
+		if err := l.TryLock(ctx); err != nil {
+			t.Errorf("Trylock arr: %v", err.Error())
+			return
+		}
+		t.Log("acquired lock for ")
+		t.Log("Do some work in")
+		time.Sleep(2 * time.Second)
+		if err := l.Unlock(ctx); err != nil {
+			t.Error(err.Error())
+		}
+		t.Log("released lock for ")
+	})
 
 	t.Run("Test Watch data", func(t *testing.T) {
 		ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
